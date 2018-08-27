@@ -1,0 +1,160 @@
+macro =;
+rseed 0;
+
+/*** Version 3 features: SPR distance calculation; Output list of mismatched sis/anc nodes ***/
+
+/*** 1 filename: name of character matrix file ***/
+/*** 2 gencharn: gen char number ***/
+
+/*** input ***/
+proc %1;
+
+/*** variables ***/
+var: thetax genchar nums numtax refsis sistax eqtax siscount totsiscount refanc newanc eqanc anccount totanccount sprdist taxname;
+set nums ntax;
+set numtax ntax+1;
+var: rflist['numtax'] sprlist['numtax'] ; /*** set up variables that will be used in the script ***/
+
+/*** reference tree ***/
+hold 10000;  /** modify as needed **/
+taxname =;
+collapse rule 1; /*** modify appropriately ***/
+mult: replic 1000 hold 10; /*** modify appropriately ***/
+mult;
+bbreak;
+nelsen *;
+tsave* simfossil.tnttre;
+save /;
+keep 0;
+
+/*** pseudofossilization ***/
+/*** option 1: successively pseudofossilized one taxon at a time ***/
+set genchar %2;
+loop 1 ntax  /** starts with 1 assuming Taxon 0 is outgroup taxon **/
+	proc %1;
+	loop 0 'genchar'
+		xread =#2 #1 ?;
+		stop
+	hold 10000;  /*** modify as needed ***/
+	mult;
+   	bbreak;
+   	nelsen *;
+   	save /;
+	keep 0;
+stop
+tsave /;
+
+/*** sil =console; ***/
+proc simfossil.tnttre;
+nelsen *1.'nums';
+tsave *simfossil_consensus.tnttre;
+save /;
+tsave /;
+keep 0;
+
+/*** calculate r-f distances ***/
+proc simfossil.tnttre;
+set 0 collapse ;  /*** remember value of cllpse in variable 0 ***/
+collapse none ;
+loop 1 ntax
+  tcomp * 0 #1; /*** This is based on R-F script written by P. Goloboff ***/
+  tcomp * #1 0;
+  set 1 ((tnodes[ntrees]+tnodes[(ntrees-1)])/(tnodes[0]+tnodes[#1]));
+  collapse '0';
+  set nums ntrees - 1 ;
+  keep 'nums';
+  set rflist[#1] '/.3(1)';
+  stop
+
+sil -all;
+log simfossil_rfdist.txt;
+loop 1 ntax
+    quote 'rflist[(#1)]';
+    stop
+log /;
+
+/*** calculate spr distances ***/
+loop 1 ntax
+	set sprdist sprdiff [#1 0 100];
+	quote 'sprdist';
+	set sprlist[#1] 'sprdist' ;
+	stop
+log simfossil_sprdist.txt;
+loop 1 ntax
+	quote 'sprlist[(#1)]';
+	stop
+log /;
+
+/*** compare sister groups ***/
+set siscount 0;
+set totsiscount 0;
+log simfossil_sistermismatch.txt;
+loop 1 ntax  /** !! starts with 1 assuming taxon 0 is outgroup !! **/
+	set refsis sister[0 #1];  /** sister group of each taxon in ref tree **/
+	/* quote Sister Node in Ref Tree: ; */
+	/* quote 'refsis'; */
+	set sistax sister[#1 #1];
+	/* quote Sister Node in SimFossil Tree: ; */
+	/* quote 'sistax'; */
+	if ( ('refsis' >= 0) && ('sistax' >= 0) )
+		set eqtax eqgroup[0 'refsis' #1];
+		/* quote Equivalent Node of Ref Tree Sister in SimFossil Tree: ; */
+		/* quote 'eqtax'; */
+		if ( 'eqtax' == 'sistax' )
+			/* quote MATCH!; */
+			set siscount ('siscount'+1);
+			set totsiscount ('totsiscount'+1);
+		else
+			quote Tree '#1' has sister group mismatch for:;
+			taxlabels #1;
+			set totsiscount ('totsiscount'+1);
+		end
+	else
+		/* quote NOT APPLICABLE!; */
+		/** This occurs when sister node has different number of direct descendants **/
+	end
+stop
+log /;
+
+/*** compare ancestors ***/
+set anccount 0;
+set totanccount 0;
+log simfossil_ancmismatch.txt;
+loop 1 ntax  /** !! starts with 1 assuming taxon 0 is outgroup !! **/
+	set refanc anc[0 #1];  /** ancestor of each taxon in ref tree **/
+	/* quote Ancestor in Ref Tree: ; */
+	/* quote 'refanc'; */
+	set newanc anc[#1 #1];
+	/* quote Ancestor in SimFossil Tree: ; */
+	/* quote 'newanc'; */
+	set eqanc eqgroup[0 'refanc' #1];
+	/* quote 'eqanc'; */
+	if ( 'eqanc' == 'newanc' )
+			/* quote MATCH!; */
+			set anccount ('anccount'+1);
+			set totanccount ('totanccount'+1);
+		else
+			quote Tree '#1' has ancestor mismatch for:;
+			taxlabels #1;
+			set totanccount ('totanccount'+1);
+		end
+stop
+log /;
+
+quote 
+----------------------------------
+         * ANALYSIS DONE *
+
+Sister Match: 'siscount'/'totsiscount'
+Ancestor Match: 'anccount'/'totanccount'
+
+Output files: 
+1. simfossil.tnttre (first tree: consensus from original matrix)
+2. simfossil_consensus.tnttre (consensus of all trees from pseudofossilization)
+3. simfossil_rfdist.txt (list of R-F distances)
+4. simfossil_sistermimatch.txt (list of sister mismatches)
+5. simfossil_ancmismatch.txt (list of ancestor mismatches)
+----------------------------------;
+
+proc/;
+macro-;
