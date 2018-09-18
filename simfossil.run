@@ -10,7 +10,7 @@ rseed 0;
 proc %1;
 
 /*** variables ***/
-var: thetax genchar nums numtax refsis sistax eqtax siscount totsiscount refanc newanc eqanc anccount totanccount sprdist taxname;
+var: thetax genchar nums numtax refsis sprdist taxname;
 set nums ntax;
 set numtax ntax+1;
 var: rflist['numtax'] sprlist['numtax'] ; /*** set up variables that will be used in the script ***/
@@ -19,15 +19,15 @@ var: rflist['numtax'] sprlist['numtax'] ; /*** set up variables that will be use
 hold 10000;  /** modify as needed **/
 taxname =;
 collapse rule 1; /*** modify appropriately ***/
-mult: replic 1000 hold 10; /*** modify appropriately ***/
-mult;
+xmult: replic 1000 hold 10; /*** modify appropriately ***/
+xmult;
 bbreak;
 nelsen *;
 tsave* simfossil.tnttre;
 save /;
 keep 0;
 
-/*** pseudofossilization ***/
+/*** simulated fossilization ***/
 /*** option 1: successively pseudofossilized one taxon at a time ***/
 set genchar %2;
 loop 1 ntax  /** starts with 1 assuming Taxon 0 is outgroup taxon **/
@@ -36,7 +36,8 @@ loop 1 ntax  /** starts with 1 assuming Taxon 0 is outgroup taxon **/
 		xread =#2 #1 ?;
 		stop
 	hold 10000;  /*** modify as needed ***/
-	mult;
+	xmult: replic 1000 hold 10;
+	xmult;
    	bbreak;
    	nelsen *;
    	save /;
@@ -57,8 +58,8 @@ proc simfossil.tnttre;
 set 0 collapse ;  /*** remember value of cllpse in variable 0 ***/
 collapse none ;
 loop 1 ntax
-  tcomp * 0 #1; /*** This is based on R-F script written by P. Goloboff ***/
-  tcomp * #1 0;
+  tcomp * ]0 #1; /*** This is based on R-F script written by P. Goloboff ***/
+  tcomp * ]#1 0;
   set 1 ((tnodes[ntrees]+tnodes[(ntrees-1)])/(tnodes[0]+tnodes[#1]));
   collapse '0';
   set nums ntrees - 1 ;
@@ -85,75 +86,15 @@ loop 1 ntax
 	stop
 log /;
 
-/*** compare sister groups ***/
-set siscount 0;
-set totsiscount 0;
-log simfossil_sistermismatch.txt;
-loop 1 ntax  /** !! starts with 1 assuming taxon 0 is outgroup !! **/
-	set refsis sister[0 #1];  /** sister group of each taxon in ref tree **/
-	/* quote Sister Node in Ref Tree: ; */
-	/* quote 'refsis'; */
-	set sistax sister[#1 #1];
-	/* quote Sister Node in SimFossil Tree: ; */
-	/* quote 'sistax'; */
-	if ( ('refsis' >= 0) && ('sistax' >= 0) )
-		set eqtax eqgroup[0 'refsis' #1];
-		/* quote Equivalent Node of Ref Tree Sister in SimFossil Tree: ; */
-		/* quote 'eqtax'; */
-		if ( 'eqtax' == 'sistax' )
-			/* quote MATCH!; */
-			set siscount ('siscount'+1);
-			set totsiscount ('totsiscount'+1);
-		else
-			quote Tree '#1' has sister group mismatch for:;
-			taxlabels #1;
-			set totsiscount ('totsiscount'+1);
-		end
-	else
-		/* quote NOT APPLICABLE!; */
-		/** This occurs when sister node has different number of direct descendants **/
-	end
-stop
-log /;
-
-/*** compare ancestors ***/
-set anccount 0;
-set totanccount 0;
-log simfossil_ancmismatch.txt;
-loop 1 ntax  /** !! starts with 1 assuming taxon 0 is outgroup !! **/
-	set refanc anc[0 #1];  /** ancestor of each taxon in ref tree **/
-	/* quote Ancestor in Ref Tree: ; */
-	/* quote 'refanc'; */
-	set newanc anc[#1 #1];
-	/* quote Ancestor in SimFossil Tree: ; */
-	/* quote 'newanc'; */
-	set eqanc eqgroup[0 'refanc' #1];
-	/* quote 'eqanc'; */
-	if ( 'eqanc' == 'newanc' )
-			/* quote MATCH!; */
-			set anccount ('anccount'+1);
-			set totanccount ('totanccount'+1);
-		else
-			quote Tree '#1' has ancestor mismatch for:;
-			taxlabels #1;
-			set totanccount ('totanccount'+1);
-		end
-stop
-log /;
-
 quote 
 ----------------------------------
          * ANALYSIS DONE *
-
-Sister Match: 'siscount'/'totsiscount'
-Ancestor Match: 'anccount'/'totanccount'
 
 Output files: 
 1. simfossil.tnttre (first tree: consensus from original matrix)
 2. simfossil_consensus.tnttre (consensus of all trees from pseudofossilization)
 3. simfossil_rfdist.txt (list of R-F distances)
-4. simfossil_sistermimatch.txt (list of sister mismatches)
-5. simfossil_ancmismatch.txt (list of ancestor mismatches)
+4. simfossil_sprdist.txt (list of SPR distances)
 ----------------------------------;
 
 proc/;
